@@ -1,0 +1,51 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist",
+    "withGlobalTauri": false
+  },
+  "package": {
+    "productName": "OptiBridge",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "dialog": {
+        "all": false,
+        "open": true
+      },
+      "fs": {
+        "all": false,
+        "readFile": true,
+        "scope": ["$APPDATA/*", "$HOME/*"]
+      }
+    },
+    "bundle": {
+      "active": false,
+      "identifier": "com.optibridge.app",
+      "targets": "all"
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "OptiBridge",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ]
+  }
+}
+
