@@ -1,14 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { safeInvoke } from "@/lib/tauri";
 import { Button } from "@/components/common/Button";
 import { useAppStore } from "@/state/appStore";
 import { useToast } from "@/hooks/useToast";
-import { Copy, Trash2, Check, Image as ImageIcon, ExternalLink, Calendar } from "lucide-react";
+import { Copy, Trash2, Check, Image as ImageIcon, ExternalLink, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+
+const ITEMS_PER_PAGE = 10;
 
 export default function HistoryView() {
   const { history, setHistory } = useAppStore();
   const { toast } = useToast();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     loadHistory();
@@ -51,6 +54,12 @@ export default function HistoryView() {
       await safeInvoke("delete_history_item", { id, url, provider });
       await loadHistory();
       
+      // Reset to first page if current page becomes empty
+      const totalPages = Math.ceil((history.length - 1) / ITEMS_PER_PAGE);
+      if (currentPage > totalPages && totalPages > 0) {
+        setCurrentPage(totalPages);
+      }
+      
       toast({
         title: "Deleted",
         description: "Item removed from history",
@@ -63,6 +72,21 @@ export default function HistoryView() {
       });
     }
   };
+
+  // Pagination calculations
+  const totalPages = Math.ceil(history.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedHistory = useMemo(() => {
+    return history.slice(startIndex, endIndex);
+  }, [history, startIndex, endIndex]);
+
+  // Reset to page 1 when history changes
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [history.length, totalPages, currentPage]);
 
   if (history.length === 0) {
     return (
@@ -82,96 +106,169 @@ export default function HistoryView() {
 
   return (
     <div className="max-w-7xl mx-auto">
+      {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold mb-2">Upload History</h2>
-        <p className="text-muted-foreground">{history.length} {history.length === 1 ? 'item' : 'items'}</p>
+        <p className="text-muted-foreground">
+          {history.length} {history.length === 1 ? 'item' : 'items'}
+          {totalPages > 1 && ` • Page ${currentPage} of ${totalPages}`}
+        </p>
       </div>
-      
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {history.map((item) => (
-          <div 
-            key={item.id} 
-            className="group bg-card border border-border/50 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 hover:border-primary/50 animate-in fade-in-50 slide-in-from-bottom-4"
-          >
-            {/* Thumbnail */}
-            {item.thumbnailBase64 ? (
-              <div className="aspect-video bg-gradient-to-br from-muted/50 to-muted overflow-hidden relative">
-                <img
-                  src={`data:image/webp;base64,${item.thumbnailBase64}`}
-                  alt={item.originalName}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            ) : (
-              <div className="aspect-video bg-muted flex items-center justify-center">
-                <ImageIcon className="h-12 w-12 text-muted-foreground" />
-              </div>
-            )}
-            
-            {/* Content */}
-            <div className="p-4 space-y-3">
-              <div>
-                <p className="font-semibold text-sm truncate mb-1">{item.originalName}</p>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                    {item.provider === "cloudinary" ? "Cloudinary" : "R2"}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {new Date(item.createdAt * 1000).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
 
-              {/* URL */}
-              <div className="relative">
-                <div className="text-xs break-all bg-muted/50 p-2 rounded-lg font-mono text-muted-foreground line-clamp-2">
-                  {item.url}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-2 pt-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => handleCopy(item.url, item.id)}
-                >
-                  {copiedId === item.id ? (
-                    <>
-                      <Check className="mr-1.5 h-3.5 w-3.5" />
-                      Copied
-                    </>
+      {/* List View */}
+      <div className="bg-card border border-border/50 rounded-xl overflow-hidden shadow-sm">
+        <div className="divide-y divide-border/50">
+          {paginatedHistory.map((item) => (
+            <div
+              key={item.id}
+              className="group hover:bg-muted/30 transition-colors duration-150"
+            >
+              <div className="p-4 flex items-center gap-4">
+                {/* Thumbnail */}
+                <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden bg-muted border border-border/50">
+                  {item.thumbnailBase64 ? (
+                    <img
+                      src={`data:image/webp;base64,${item.thumbnailBase64}`}
+                      alt={item.originalName}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <>
-                      <Copy className="mr-1.5 h-3.5 w-3.5" />
-                      Copy
-                    </>
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
                   )}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.open(item.url, '_blank')}
-                  className="shrink-0"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleDelete(item.id, item.url, item.provider)}
-                  className="shrink-0"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate mb-1">
+                        {item.originalName}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                          {item.provider === "cloudinary" ? "Cloudinary" : "R2"}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(item.createdAt * 1000).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* URL */}
+                  <div className="text-xs font-mono text-muted-foreground truncate bg-muted/50 px-2 py-1 rounded">
+                    {item.url}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleCopy(item.url, item.id)}
+                    className="h-9"
+                  >
+                    {copiedId === item.id ? (
+                      <>
+                        <Check className="h-4 w-4 mr-1.5" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4 mr-1.5" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(item.url, '_blank')}
+                    className="h-9 w-9 p-0"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => handleDelete(item.id, item.url, item.provider)}
+                    className="h-9 w-9 p-0"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Showing {startIndex + 1} to {Math.min(endIndex, history.length)} of {history.length} items
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="h-9"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                // Show first page, last page, current page, and pages around current
+                if (
+                  page === 1 ||
+                  page === totalPages ||
+                  (page >= currentPage - 1 && page <= currentPage + 1)
+                ) {
+                  return (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="h-9 w-9 p-0"
+                    >
+                      {page}
+                    </Button>
+                  );
+                } else if (page === currentPage - 2 || page === currentPage + 2) {
+                  return (
+                    <span key={page} className="px-2 text-muted-foreground">
+                      ...
+                    </span>
+                  );
+                }
+                return null;
+              })}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="h-9"
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
