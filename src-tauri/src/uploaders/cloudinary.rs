@@ -1,4 +1,4 @@
-use reqwest::blocking::multipart;
+use reqwest::multipart;
 use sha1::{Digest, Sha1};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,7 +17,7 @@ impl CloudinaryUploader {
         }
     }
 
-    pub fn upload(&self, image_data: &[u8], filename: &str) -> Result<String, String> {
+    pub async fn upload(&self, image_data: &[u8], filename: &str) -> Result<String, String> {
         // Generate timestamp
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -48,20 +48,22 @@ impl CloudinaryUploader {
             self.cloud_name
         );
 
-        let client = reqwest::blocking::Client::new();
+        let client = reqwest::Client::new();
         let response = client
             .post(&url)
             .multipart(form)
             .send()
+            .await
             .map_err(|e| format!("Upload request failed: {}", e))?;
 
         if !response.status().is_success() {
-            let error_text = response.text().unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
             return Err(format!("Upload failed: {}", error_text));
         }
 
         let json: serde_json::Value = response
             .json()
+            .await
             .map_err(|e| format!("Failed to parse response: {}", e))?;
 
         let public_url = json["secure_url"]

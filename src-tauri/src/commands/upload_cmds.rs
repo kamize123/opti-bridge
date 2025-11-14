@@ -38,7 +38,7 @@ pub async fn upload_image(
                 config.cloudinary_api_key,
                 config.cloudinary_api_secret,
             );
-            uploader.upload(&image_data, "image.webp")?
+            uploader.upload(&image_data, "image.webp").await?
         }
         "r2" => {
             let uploader = R2Uploader::new(
