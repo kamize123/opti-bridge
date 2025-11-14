@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/tauri";
+import { safeInvoke } from "@/lib/tauri";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
 import { Label } from "@/components/common/Label";
 import { useToast } from "@/hooks/useToast";
 import { GreetTest } from "@/components/features/GreetTest";
+import { Cloud, Settings as SettingsIcon, Image as ImageIcon, Save, Loader2 } from "lucide-react";
 
 interface ConfigData {
   cloudinary_cloud_name: string;
@@ -40,16 +41,23 @@ export default function SettingsView() {
 
   const loadConfig = async () => {
     try {
-      const result = await invoke<ConfigData>("get_config");
+      const result = await safeInvoke<ConfigData>("get_config");
       setConfig(result);
     } catch (error) {
       console.error("Failed to load config:", error);
     }
   };
 
+  const handleChange = (key: keyof ConfigData, value: string | number | boolean) => {
+    setConfig((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleSave = async () => {
+    setIsSaving(true);
     try {
-      await invoke("save_config", { config });
+      await safeInvoke("save_config", { config });
       
       toast({
         title: "Settings saved",
@@ -61,21 +69,37 @@ export default function SettingsView() {
         description: String(error),
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleChange = (key: keyof ConfigData, value: string | number | boolean) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
-  };
-
   return (
-    <div className="h-full overflow-auto">
-      <div className="max-w-2xl space-y-8">
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold mb-2">Settings</h2>
+        <p className="text-muted-foreground">Configure your cloud providers and preferences</p>
+      </div>
+
+      {/* IPC Test */}
+      <div className="mb-8">
         <GreetTest />
+      </div>
+
+      {/* Cloudinary Section */}
+      <div className="bg-card border border-border/50 rounded-xl p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Cloud className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold">Cloudinary</h3>
+            <p className="text-sm text-muted-foreground">Configure Cloudinary credentials</p>
+          </div>
+        </div>
         
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Cloudinary Settings</h2>
-          
+        <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="cloudinary_cloud_name">Cloud Name</Label>
             <Input
@@ -96,7 +120,7 @@ export default function SettingsView() {
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 md:col-span-2">
             <Label htmlFor="cloudinary_api_secret">API Secret</Label>
             <Input
               id="cloudinary_api_secret"
@@ -107,10 +131,21 @@ export default function SettingsView() {
             />
           </div>
         </div>
+      </div>
 
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Cloudflare R2 Settings</h2>
-          
+      {/* Cloudflare R2 Section */}
+      <div className="bg-card border border-border/50 rounded-xl p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Cloud className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold">Cloudflare R2</h3>
+            <p className="text-sm text-muted-foreground">Configure R2 storage credentials</p>
+          </div>
+        </div>
+        
+        <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="r2_access_key_id">Access Key ID</Label>
             <Input
@@ -152,7 +187,7 @@ export default function SettingsView() {
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 md:col-span-2">
             <Label htmlFor="r2_public_domain">Public Domain</Label>
             <Input
               id="r2_public_domain"
@@ -162,10 +197,21 @@ export default function SettingsView() {
             />
           </div>
         </div>
+      </div>
 
+      {/* Processing Settings */}
+      <div className="bg-card border border-border/50 rounded-xl p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <ImageIcon className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold">Processing Settings</h3>
+            <p className="text-sm text-muted-foreground">Configure image processing options</p>
+          </div>
+        </div>
+        
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Processing Settings</h2>
-          
           <div className="space-y-2">
             <Label htmlFor="settings_max_width">Max Width (px)</Label>
             <Input
@@ -175,23 +221,45 @@ export default function SettingsView() {
               onChange={(e) => handleChange("settings_max_width", parseInt(e.target.value))}
               min="100"
               max="4000"
+              className="max-w-xs"
             />
+            <p className="text-xs text-muted-foreground">Images wider than this will be resized</p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-muted/30">
             <input
               id="settings_auto_webp"
               type="checkbox"
               checked={config.settings_auto_webp}
               onChange={(e) => handleChange("settings_auto_webp", e.target.checked)}
-              className="w-4 h-4"
+              className="w-4 h-4 text-primary rounded"
             />
-            <Label htmlFor="settings_auto_webp">Auto convert to WebP</Label>
+            <Label htmlFor="settings_auto_webp" className="cursor-pointer flex-1">
+              <span className="font-medium">Auto convert to WebP</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Automatically convert images to WebP format for better compression</p>
+            </Label>
           </div>
         </div>
+      </div>
 
-        <Button onClick={handleSave} className="w-full">
-          Save Settings
+      {/* Save Button */}
+      <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border/50 p-4 -mx-8 -mb-8">
+        <Button 
+          onClick={handleSave} 
+          className="w-full h-11 text-base font-medium"
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save Settings
+            </>
+          )}
         </Button>
       </div>
     </div>

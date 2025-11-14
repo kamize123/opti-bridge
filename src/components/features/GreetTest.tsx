@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/tauri";
+import { safeInvoke } from "@/lib/tauri";
 import { Button } from "@/components/common/Button";
 import { Input } from "@/components/common/Input";
 
@@ -15,7 +15,7 @@ export function GreetTest() {
   const handleGreet = async () => {
     try {
       setError("");
-      const result = await invoke<string>("greet", { name });
+      const result = await safeInvoke<string>("greet", { name });
       setGreeting(result);
     } catch (err) {
       setError(String(err));
